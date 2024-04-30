@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<!-- Charset -->
+		<meta charset="utf-8" >
+		<!-- Viewport -->
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<!-- Canvas Candle Charts -->
+		<script src="../candle.js"></script>
+	</head>
+	<body>
+		<div id="asset_container">
+			<label for="asset">Input symbol name: </label>
+			<input type="text" value="BTCEUR" id="asset" />
+			&nbsp;
+			<input type="checkbox" id="tframe" name="tframe" /><label for="tframe">1 DAY</label>
+		</div>
+		<canvas id="demo-canvas" nocapture></canvas>
+	</body>
+	<style>
+		body {
+			margin: 0;
+			padding: 0;
+			width: 100vw;
+			min-height: 100vh;
+			background: #aaa;
+		}
+		canvas#demo-canvas {
+			margin: 10% 10%;
+			width: 80%;
+			height: 80%;
+			border: 1px black dashed;
+		}
+		div#asset_container {
+			position: fixed;
+			top: 1em;
+			left: 1ch;
+		}
+	</style>
+	<script>
+		let tf = "1d";
+		let demoChart = new CandleChart(document.querySelector("#demo-canvas"));
+		console.log(demoChart);
+
+		// Get data from Binance
+		async function fetchBinance(interval = "1d", endTime = null) {
+			if (!document.querySelector("#asset").value)
+				console.trace("CARAUL");
+			let uri = 'https://api.binance.com/api/v3/klines?symbol=' + document.querySelector("#asset").value + `&interval=${interval}&limit=1000`;
+			if (endTime != null) uri += `&endTime=${endTime}`;
+			return fetch(uri).then(response => response.json()).then(rjs => {
+				let data = rjs.map(rjse => ({ timeOpen: parseInt(rjse[0]), priceOpen: rjse[1], priceHigh: rjse[2], priceLow: rjse[3], priceClose: rjse[4], volume: rjse[5] }));
+				return data;
+			});
+		}
+
+		/*
+		async function fetchBinanceLong(chunks) {
+			let now = new Date();
+			let results = new Array(chunks);
+			console.log(now.getTime());
+			for (let i = 0; i < chunks; ++i) {
+				results[i] = fetchBinance("1m", now.getTime());
+				now = new Date(now - 60 * 60 * 1000 * 1000);
+			}
+			console.log(results);
+			return results.reduce(async (p, v) => (await p).concat(await v), []);
+		}
+	        */
+		async function fAsset(rescaleX = true) {
+			// Fill data
+			// let data = await fetchBinance();
+			let data = await fetchBinance(tf);
+
+			// Initialize chart
+			demoChart.update(data, [ rescaleX, true ]);
+			demoChart.maxSticks = 1000;
+			demoChart.minSticks = 100;
+		}
+		fAsset();
+		demoChart.maxValPercentage = .4;
+		demoChart.blockSize = 1000; // Binance limit
+		demoChart.dataReqCb = async (rPos, endTime) => {
+			return await fetchBinance(tf, endTime);
+		};
+		document.querySelector("#asset").addEventListener("change", e => fAsset(false));
+		document.querySelector("#tframe").addEventListener("change", async e => {
+			let label = document.querySelector("#tframe + label");
+			if (label.innerHTML == "1 DAY") {
+				label.innerHTML = "1 MIN";
+				tf = "1m";
+			} else {
+				label.innerHTML = "1 DAY";
+				tf = "1d";
+			}
+
+			let data = await fetchBinance(tf);
+			demoChart.update(data, [ true, false ]); // Rescale only X axis when changing a timeframe
+		});
+
+	</script>
+</html>
